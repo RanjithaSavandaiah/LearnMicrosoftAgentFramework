@@ -6,6 +6,7 @@ List<ILesson> lessons =
 [
     new Day1_Intro(),
     new Day2_FirstAgent(),
+    new Day3_MultiTurn(),
 ];
 
 // If a day number is passed on the command line (e.g. "dotnet run 2"), run it
