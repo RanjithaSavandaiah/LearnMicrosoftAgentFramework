@@ -35,6 +35,7 @@ Each day reflects how the code actually evolved:
 | --- | ---- | ---------- | ---- |
 | 1 | `Days/Day1_Intro.cs` | Overview + our first `RunAsync` call. Key is **hard-coded** (the naive start). | [Overview](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) |
 | 2 | `Days/Day2_FirstAgent.cs` | Key from an **environment variable**, `RunStreamingAsync`, and **adding a tool** the agent can call. | [Your first agent](https://learn.microsoft.com/en-us/agent-framework/get-started/your-first-agent?pivots=programming-language-csharp) · [Add tools](https://learn.microsoft.com/en-us/agent-framework/get-started/add-tools?pivots=programming-language-csharp) |
+| 3 | `Days/Day3_MultiTurn.cs` | **Multi-turn conversations**: an `AgentSession` so the agent remembers earlier messages, plus an interactive chat loop. | [Multi-turn](https://learn.microsoft.com/en-us/agent-framework/get-started/multi-turn?pivots=programming-language-csharp) |
 
 > Day 1 hard-codes the key on purpose, to show where we started. Replace
 > `gsk_your_api_key_here` in `Day1_Intro.cs` if you want to run it. Day 2 reads
@@ -48,6 +49,10 @@ exposes `ToolCapableModel` (`openai/gpt-oss-20b`), and Day 2's tool sample uses
 it. Tool calls also run with `RunAsync` rather than streaming, which is more
 reliable for function invocation.
 
+### A note on sessions (Day 3)
+
+The Multi turn article calls the conversation object an **`AgentSession`** and
+created with `await agent.CreateSessionAsync()`. Creating a session is now asynchronous.
 
 
 ## Project layout
@@ -59,6 +64,6 @@ reliable for function invocation.
 
 ## Adding a new day
 
-1. Create `Days/Day3_Something.cs` implementing `ILesson`.
-2. Add `new Day3_Something()` to the `lessons` list in `Program.cs`.
+1. Create `Days/Day4_Something.cs` implementing `ILesson`.
+2. Add `new Day4_Something()` to the `lessons` list in `Program.cs`.
 
