@@ -36,6 +36,9 @@ Each day reflects how the code actually evolved:
 | 1 | `Days/Day1_Intro.cs` | Overview + our first `RunAsync` call. Key is **hard-coded** (the naive start). | [Overview](https://learn.microsoft.com/en-us/agent-framework/overview/?pivots=programming-language-csharp) |
 | 2 | `Days/Day2_FirstAgent.cs` | Key from an **environment variable**, `RunStreamingAsync`, and **adding a tool** the agent can call. | [Your first agent](https://learn.microsoft.com/en-us/agent-framework/get-started/your-first-agent?pivots=programming-language-csharp) · [Add tools](https://learn.microsoft.com/en-us/agent-framework/get-started/add-tools?pivots=programming-language-csharp) |
 | 3 | `Days/Day3_MultiTurn.cs` | **Multi-turn conversations**: an `AgentSession` so the agent remembers earlier messages, plus an interactive chat loop. | [Multi-turn](https://learn.microsoft.com/en-us/agent-framework/get-started/multi-turn?pivots=programming-language-csharp) |
+| 4 | `Days/Day4_MemoryPersistence.cs` | **Memory & persistence**: serialize an `AgentSession` to JSON, save it, then restore it after a simulated restart so the conversation survives. | [Memory](https://learn.microsoft.com/en-us/agent-framework/get-started/memory?pivots=programming-language-csharp) |
+| 5 | `Days/Day5_Workflows.cs` | **Workflows**: chain steps (executors) into a pipeline - a `Func`based `Uppercase` step feeding a class based `Reverse` step. Runs offline (no API key). | [Workflows](https://learn.microsoft.com/en-us/agent-framework/get-started/workflows?pivots=programming-language-csharp) |
+| 6 | `Days/Day6_Hosting.cs` | **Hosting**: register an agent in the dependency injection container with `AddAIAgent`, then resolve it back by name - the foundation for hosting in ASP.NET Core. | [Hosting](https://learn.microsoft.com/en-us/agent-framework/get-started/hosting?pivots=programming-language-csharp) |
 
 > Day 1 hard-codes the key on purpose, to show where we started. Replace
 > `gsk_your_api_key_here` in `Day1_Intro.cs` if you want to run it. Day 2 reads
@@ -54,6 +57,35 @@ reliable for function invocation.
 The Multi turn article calls the conversation object an **`AgentSession`** and
 created with `await agent.CreateSessionAsync()`. Creating a session is now asynchronous.
 
+Day 4 builds on this to add **persistence**: `await agent.SerializeSessionAsync(session)`
+returns a `JsonElement` you can save anywhere, and
+`await agent.DeserializeSessionAsync(json)` restores it later - even in a fresh
+agent instance - so a conversation can survive an app restart.
+
+### A note on workflows (Day 5)
+
+Workflows live in a separate package, **`Microsoft.Agents.AI.Workflows`**, which
+Day 5 adds. A workflow chains **executors** into a pipeline write a step as a
+`Func` and wrap it with `BindAsExecutor("name")`, or as a class deriving from
+`Executor<TInput, TOutput>`. Wire steps together with `WorkflowBuilder.AddEdge`,
+mark the final output with `WithOutputFrom`, then run it with
+`InProcessExecution.RunAsync`. Day 5's sample is pure string processing, so it
+needs no API key and runs offline.
+
+### A note on hosting (Day 6)
+
+Hosting lives in **`Microsoft.Agents.AI.Hosting`**, which is currently a
+**preview** package (`1.11.1-preview`). Its core idea is dependency injection:
+`builder.AddAIAgent(name, factory)` registers an agent by name as a keyed
+service, and consumers resolve it with
+`services.GetRequiredKeyedService<AIAgent>(name)`. Day 6 shows that loop with a
+Generic Host so it fits the console menu.
+
+The article's next step is to **expose** that hosted agent over HTTP (the A2A
+protocol) with ASP.NET Core - that needs a web project and a server that runs
+forever, so it lives outside this console app. The DI registration shown in Day 6
+is exactly what those web endpoints build on.
+
 
 ## Project layout
 
@@ -64,6 +96,6 @@ created with `await agent.CreateSessionAsync()`. Creating a session is now async
 
 ## Adding a new day
 
-1. Create `Days/Day4_Something.cs` implementing `ILesson`.
-2. Add `new Day4_Something()` to the `lessons` list in `Program.cs`.
+1. Create `Days/Day7_Something.cs` implementing `ILesson`.
+2. Add `new Day7_Something()` to the `lessons` list in `Program.cs`.
 
