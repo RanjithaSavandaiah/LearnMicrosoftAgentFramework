@@ -10,6 +10,7 @@ List<ILesson> lessons =
     new Day4_MemoryPersistence(),
     new Day5_Workflows(),
     new Day6_Hosting(),
+    new Day7_RunningAgents(),
 ];
 
 // If a day number is passed on the command line (e.g. "dotnet run 2"), run it
