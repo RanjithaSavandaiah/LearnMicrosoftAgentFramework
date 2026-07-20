@@ -54,6 +54,25 @@ public static class AgentFactory
     }
 
     /// <summary>
+    /// Builds a raw <see cref="IChatClient"/> against the same Groq endpoint. Useful
+    /// for components that talk to the model directly rather than through an agent -
+    /// for example an "LLM-as-judge" that scores another agent's work.
+    /// </summary>
+    public static IChatClient CreateChatClient(string? model = null)
+    {
+        string apiKey = GetApiKey()
+            ?? throw new InvalidOperationException(
+                "GROQ_API_KEY is not set. Either run:  $env:GROQ_API_KEY = \"your-key\"  in " +
+                "this terminal, or set it with setx and open a NEW terminal, then try again.");
+
+        return new OpenAIClient(
+                new ApiKeyCredential(apiKey),
+                new OpenAIClientOptions { Endpoint = new Uri(Endpoint) })
+            .GetChatClient(model ?? DefaultModel)
+            .AsIChatClient();
+    }
+
+    /// <summary>
     /// Looks up GROQ_API_KEY. Checks the current process first, then the User and
     /// Machine scopes. The extra scopes matter because <c>setx</c> updates the User
     /// scope but not the terminal that is already open, so a plain process-only read
