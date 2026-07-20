@@ -54,6 +54,27 @@ public static class AgentFactory
     }
 
     /// <summary>
+    /// Creates an agent from a fully specified <see cref="ChatClientAgentOptions"/>.
+    /// This is the richer entry point used when you need to configure pipeline pieces
+    /// like <c>AIContextProviders</c> (the context layer) or a custom chat history
+    /// provider that the simpler <see cref="CreateAgent(string?, string?, IList{AITool}?, string?)"/>
+    /// overload doesn't expose.
+    /// </summary>
+    public static AIAgent CreateAgent(ChatClientAgentOptions options, string? model = null)
+    {
+        string apiKey = GetApiKey()
+            ?? throw new InvalidOperationException(
+                "GROQ_API_KEY is not set. Either run:  $env:GROQ_API_KEY = \"your-key\"  in " +
+                "this terminal, or set it with setx and open a NEW terminal, then try again.");
+
+        return new OpenAIClient(
+                new ApiKeyCredential(apiKey),
+                new OpenAIClientOptions { Endpoint = new Uri(Endpoint) })
+            .GetChatClient(model ?? DefaultModel)
+            .AsAIAgent(options);
+    }
+
+    /// <summary>
     /// Builds a raw <see cref="IChatClient"/> against the same Groq endpoint. Useful
     /// for components that talk to the model directly rather than through an agent -
     /// for example an "LLM-as-judge" that scores another agent's work.
