@@ -143,8 +143,8 @@ public sealed class Day9_Pipeline : ILesson
         // the guardrail, which wraps the context+model pipeline.
         AIAgent supportAgent = supportCore
             .AsBuilder()
-            .Use(GuardrailMiddleware)   // inner: runs closest to the model
-            .Use(TimingMiddleware)      // outer: runs first, wraps everything
+            .Use(GuardrailRun, GuardrailRunStreaming)   // inner: can short circuit the model
+            .Use(TimingMiddleware)                       // outer: runs first, wraps everything
             .Build();
 
         // 4a. A normal question - flows through every layer and gets a grounded answer.
@@ -192,15 +192,36 @@ public sealed class Day9_Pipeline : ILesson
         },
         model: AgentFactory.ToolCapableModel);
 
+        // ENFORCEMENT layer: filtering hides tools from the model, but a model can
+        // still hallucinate a call to a tool it was never told about. This function
+        // invocation middleware is the safety net: it runs right before ANY tool
+        // executes and blocks a disallowed one outright so a filtered out tool can
+        // never actually run, even if the model tries. Filtering + enforcement =
+        // defense in depth.
+        AIAgent guardedOpsAgent = opsAgent
+            .AsBuilder()
+            .Use(async (agent, fnContext, next, cancellationToken) =>
+            {
+                string toolName = fnContext.Function.Name;
+                if (!RoleToolPolicy.IsAllowed(toolName, isAdmin: false))
+                {
+                    Console.WriteLine($"   [enforce:toolguard] DENIED execution of '{toolName}' (not permitted for role)");
+                    return $"Denied: you do not have permission to run '{toolName}'.";
+                }
+
+                return await next(fnContext, cancellationToken);
+            })
+            .Build();
+
         // A read only user asks something a read tool can answer -> allowed.
         Console.WriteLine("Read-only user: Is server web-01 healthy?");
-        Console.WriteLine($"Agent: {await opsAgent.RunAsync("Is server web-01 healthy?")}");
+        Console.WriteLine($"Agent: {await guardedOpsAgent.RunAsync("Is server web-01 healthy?")}");
 
-        // asks for a destructive action -> the tool was filtered OUT, so the
-        // model literally cannot call it and must decline.
+        // asks for a destructive action -> the tool was filtered out of the model's
+        // view AND, if it still tries, the enforcement guard blocks the execution.
         Console.WriteLine();
         Console.WriteLine("Read-only user: Delete the production database now.");
-        Console.WriteLine($"Agent: {await opsAgent.RunAsync("Delete the production database 'prod-db' now.")}");
+        Console.WriteLine($"Agent: {await guardedOpsAgent.RunAsync("Delete the production database 'prod-db' now.")}");
 
         Console.WriteLine();
         Console.WriteLine("Takeaway: an agent is a layered pipeline. Add middleware to wrap the whole");
@@ -222,25 +243,54 @@ public sealed class Day9_Pipeline : ILesson
     }
 
     // Inner middleware: a safety guardrail that short circuits disallowed requests
-    // BEFORE the model is ever called by simply not invoking 'next'.
-    private static async Task GuardrailMiddleware(
-        IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? options,
-        Func<IEnumerable<ChatMessage>, AgentSession?, AgentRunOptions?, CancellationToken, Task> next,
-        CancellationToken cancellationToken)
+    // BEFORE the model is ever called. Because it must be able to RETURN a response
+    // without calling the inner agent, it uses the richer Use(run, runStreaming)
+    // overload (the shared-delegate overload can't short circuit it must call next).
+    private static readonly string[] BlockedPhrases =
+        ["ignore your rules", "another customer", "password of", "system prompt"];
+
+    private const string GuardrailRefusal =
+        "I'm sorry, I can't help with that request. Is there something else about "
+      + "your own account I can assist with?";
+
+    private static bool IsBlocked(IEnumerable<ChatMessage> messages)
     {
         string text = messages.LastOrDefault()?.Text ?? string.Empty;
-        string[] blocked = ["ignore your rules", "another customer", "password of", "system prompt"];
+        return BlockedPhrases.Any(b => text.Contains(b, StringComparison.OrdinalIgnoreCase));
+    }
 
-        if (blocked.Any(b => text.Contains(b, StringComparison.OrdinalIgnoreCase)))
+    private static async Task<AgentResponse> GuardrailRun(
+        IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? options,
+        AIAgent inner, CancellationToken cancellationToken)
+    {
+        if (IsBlocked(messages))
         {
             Console.WriteLine("   [pipeline:guardrail] BLOCKED - request violates policy, skipping LLM call");
-            Console.Write("I'm sorry, I can't help with that request. Is there something else about "
-                        + "your own account I can assist with?");
-            return; // never call next() -> the model is never invoked
+            return new AgentResponse(new ChatMessage(ChatRole.Assistant, GuardrailRefusal));
         }
 
         Console.WriteLine("   [pipeline:guardrail] allowed");
-        await next(messages, session, options, cancellationToken);
+        return await inner.RunAsync(messages, session, options, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<AgentResponseUpdate> GuardrailRunStreaming(
+        IEnumerable<ChatMessage> messages, AgentSession? session, AgentRunOptions? options,
+        AIAgent inner,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (IsBlocked(messages))
+        {
+            Console.WriteLine("   [pipeline:guardrail] BLOCKED - request violates policy, skipping LLM call");
+            yield return new AgentResponseUpdate(ChatRole.Assistant, GuardrailRefusal);
+            yield break;
+        }
+
+        Console.WriteLine("   [pipeline:guardrail] allowed");
+        await foreach (AgentResponseUpdate update in
+            inner.RunStreamingAsync(messages, session, options, cancellationToken))
+        {
+            yield return update;
+        }
     }
 
     private static void Pause()
@@ -402,6 +452,23 @@ internal static class OpsTools
 }
 
 /// <summary>
+/// The single source of truth for which tools each role may use. Shared by the
+/// context layer filter (which hides tools from the model) and the function
+/// invocation guard (which blocks execution) so both agree on the same policy.
+/// </summary>
+internal static class RoleToolPolicy
+{
+    // Read only callers are limited to these safe tools, admins may use everything.
+    private static readonly HashSet<string> ReadOnlyAllowed = new(StringComparer.OrdinalIgnoreCase)
+    {
+        nameof(OpsTools.GetServerHealth),
+    };
+
+    public static bool IsAllowed(string toolName, bool isAdmin)
+        => isAdmin || ReadOnlyAllowed.Contains(toolName);
+}
+
+/// <summary>
 /// A context layer provider that performs TOOL FILTERING. It receives the tools
 /// already on the request via <see cref="AIContext.Tools"/> and returns a NARROWED
 /// subset based on the caller's role. Non admins only ever see safe, read only
@@ -411,12 +478,6 @@ internal static class OpsTools
 /// </summary>
 internal sealed class RoleBasedToolFilterProvider(bool isAdmin) : AIContextProvider
 {
-    // Read only callers are limited to these safe tools, everything else is admin only.
-    private static readonly HashSet<string> ReadOnlyAllowed = new(StringComparer.OrdinalIgnoreCase)
-    {
-        nameof(OpsTools.GetServerHealth),
-    };
-
     protected override ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context, CancellationToken cancellationToken = default)
     {
@@ -424,9 +485,7 @@ internal sealed class RoleBasedToolFilterProvider(bool isAdmin) : AIContextProvi
         IReadOnlyList<AITool> available = context.AIContext?.Tools?.ToList() ?? [];
 
         // Admins keep every tool, non admins get only the allow listed safe ones.
-        List<AITool> filtered = isAdmin
-            ? [.. available]
-            : [.. available.Where(t => ReadOnlyAllowed.Contains(t.Name))];
+        List<AITool> filtered = [.. available.Where(t => RoleToolPolicy.IsAllowed(t.Name, isAdmin))];
 
         string kept = filtered.Count == 0 ? "(none)" : string.Join(", ", filtered.Select(t => t.Name));
         Console.WriteLine(
