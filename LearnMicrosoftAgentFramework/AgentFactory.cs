@@ -25,6 +25,12 @@ public static class AgentFactory
     public const string ToolCapableModel = "openai/gpt-oss-20b";
 
     /// <summary>
+    /// A multimodal (vision) model that can accept image content in a message, used
+    /// by the "using images" samples. Llama 4 Scout on Groq accepts image URLs.
+    /// </summary>
+    public const string VisionModel = "meta-llama/llama-4-scout-17b-16e-instruct";
+
+    /// <summary>
     /// Creates an agent. Pass an optional <paramref name="name"/>,
     /// <paramref name="instructions"/> to give the agent its own persona,
     /// optional <paramref name="tools"/> the agent can call during a run, and an
