@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.11.1-preview.260625.1" />
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.11.1" />
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.11.1" />
+    <PackageReference Include="Mscc.GenerativeAI.Microsoft" Version="3.1.0" />
   </ItemGroup>
 
 </Project>

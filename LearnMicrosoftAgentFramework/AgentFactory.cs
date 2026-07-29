@@ -1,6 +1,7 @@
 using System.ClientModel;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Mscc.GenerativeAI.Microsoft;
 using OpenAI;
 using OpenAI.Chat;
 
@@ -25,10 +26,11 @@ public static class AgentFactory
     public const string ToolCapableModel = "openai/gpt-oss-20b";
 
     /// <summary>
-    /// A multimodal (vision) model that can accept image content in a message, used
-    /// by the "using images" samples. Llama 4 Scout on Groq accepts image URLs.
+    /// A multimodal (vision) model used by the "using images" samples. We use Google
+    /// Gemini here (via GOOGLE_API_KEY) because it accepts image content; the Groq
+    /// free tier does not currently expose a vision model.
     /// </summary>
-    public const string VisionModel = "meta-llama/llama-4-scout-17b-16e-instruct";
+    public const string VisionModel = "gemini-2.5-flash";
 
     /// <summary>
     /// Creates an agent. Pass an optional <paramref name="name"/>,
@@ -105,7 +107,32 @@ public static class AgentFactory
     /// scope but not the terminal that is already open, so a plain process-only read
     /// would miss it until the terminal is restarted.
     /// </summary>
-    private static string? GetApiKey()
+    private static string? GetApiKey() => GetEnvVar("GROQ_API_KEY");
+
+    /// <summary>
+    /// Creates a vision capable agent backed by Google Gemini. The multimodal parts
+    /// of the lessons (image analysis, receipt extraction) use this because the Groq
+    /// free tier has no vision model. Reads the key from GOOGLE_API_KEY.
+    /// </summary>
+    public static AIAgent CreateVisionAgent(string? name = null, string? instructions = null, string? model = null)
+    {
+        string apiKey = GetEnvVar("GOOGLE_API_KEY")
+            ?? throw new InvalidOperationException(
+                "GOOGLE_API_KEY is not set. Set it with:  setx GOOGLE_API_KEY \"your-key\"  and open " +
+                "a NEW terminal (or set it for this process), then try again.");
+
+        IChatClient chatClient = new GeminiClient(apiKey).AsIChatClient(model ?? VisionModel);
+
+        return chatClient.AsAIAgent(
+            instructions: instructions ?? "You are a helpful assistant that can analyze images.",
+            name: name);
+    }
+
+    /// <summary>
+    /// Reads an environment variable, checking the process, then user, then machine
+    /// scope so a value set via <c>setx</c> is picked up without restarting.
+    /// </summary>
+    private static string? GetEnvVar(string name)
     {
         foreach (EnvironmentVariableTarget scope in new[]
                  {
@@ -114,7 +141,7 @@ public static class AgentFactory
                      EnvironmentVariableTarget.Machine,
                  })
         {
-            string? value = Environment.GetEnvironmentVariable("GROQ_API_KEY", scope);
+            string? value = Environment.GetEnvironmentVariable(name, scope);
             if (!string.IsNullOrWhiteSpace(value))
             {
                 return value;

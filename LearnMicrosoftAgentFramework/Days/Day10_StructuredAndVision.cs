@@ -167,10 +167,9 @@ public sealed class Day10_StructuredAndVision : ILesson
         Console.WriteLine("Part 4: Vision - the agent analyzes an image");
         Console.WriteLine("--------------------------------------------");
 
-        AIAgent visionAgent = AgentFactory.CreateAgent(
+        AIAgent visionAgent = AgentFactory.CreateVisionAgent(
             name: "VisionAgent",
-            instructions: "You are a helpful assistant that can analyze images. Be concise.",
-            model: AgentFactory.VisionModel);
+            instructions: "You are a helpful assistant that can analyze images. Be concise.");
 
         const string ImageUrl =
             "https://raw.githubusercontent.com/Azure-Samples/cognitive-services-sample-data-files/master/ComputerVision/Images/landmark.jpg";
@@ -192,13 +191,12 @@ public sealed class Day10_StructuredAndVision : ILesson
         Console.WriteLine("Part 5: Receipt auditor - read an image, return a typed expense report");
         Console.WriteLine("---------------------------------------------------------------------");
 
-        AIAgent auditor = AgentFactory.CreateAgent(
+        AIAgent auditor = AgentFactory.CreateVisionAgent(
             name: "ExpenseAuditor",
             instructions:
                 "You are an expense auditor. Read the receipt image and extract the merchant, "
               + "date, currency, line items, and total. Categorize the expense. If a value is "
-              + "not legible, use your best estimate and set a low confidence.",
-            model: AgentFactory.VisionModel);
+              + "not legible, use your best estimate and set a low confidence.");
 
         // A real, publicly hosted sample receipt image.
         const string ReceiptUrl =
