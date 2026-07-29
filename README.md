@@ -15,6 +15,15 @@ setx GROQ_API_KEY "your-key-here"
 > Day 2 reads the key from this environment variable (the recommended approach).
 > Day 1 hard-codes it on purpose to show where we started - never commit real keys.
 
+**Day 10 (vision) also needs a Google Gemini key.** The Groq free tier has no
+vision model, so the vision parts run on Gemini (`gemini-2.5-flash`). Set it once:
+
+```powershell
+setx GOOGLE_API_KEY "your-gemini-key-here"
+```
+
+> If `GOOGLE_API_KEY` is missing, Day 10's vision parts are skipped gracefully.
+
 ## Run it
 
 ```powershell
@@ -39,8 +48,15 @@ Each day reflects how the code actually evolved:
 | 4 | `Days/Day4_MemoryPersistence.cs` | **Memory & persistence**: serialize an `AgentSession` to JSON, save it, then restore it after a simulated restart so the conversation survives. | [Memory](https://learn.microsoft.com/en-us/agent-framework/get-started/memory?pivots=programming-language-csharp) |
 | 5 | `Days/Day5_Workflows.cs` | **Workflows**: chain steps (executors) into a pipeline - a `Func`based `Uppercase` step feeding a class based `Reverse` step. Runs offline (no API key). | [Workflows](https://learn.microsoft.com/en-us/agent-framework/get-started/workflows?pivots=programming-language-csharp) |
 | 6 | `Days/Day6_Hosting.cs` | **Hosting**: register an agent in the dependency injection container with `AddAIAgent`, then resolve it back by name - the foundation for hosting in ASP.NET Core. | [Hosting](https://learn.microsoft.com/en-us/agent-framework/get-started/hosting?pivots=programming-language-csharp) |
+| 7 | `Days/Day7_RunningAgents.cs` | **Running agents**: the many ways to run an `AIAgent` - single string, explicit `ChatMessage` lists, `RunStreamingAsync`, sessions, `ChatClientAgentRunOptions`, and cancellation. | [Agents](https://learn.microsoft.com/en-us/agent-framework/agents/?pivots=programming-language-csharp) · [Running agents](https://learn.microsoft.com/en-us/agent-framework/agents/running-agents?pivots=programming-language-csharp) |
+| 8 | `Days/Day8_Harness.cs` | **Agent harness**: a self driving loop with `LoopAgent`. Completion-marker, delegate, and AI-judge evaluators, plus every `LoopAgentOptions`. *(experimental, MAAI001)* | [Harness](https://learn.microsoft.com/en-us/agent-framework/agents/harness?pivots=programming-language-csharp) |
+| 9 | `Days/Day9_Pipeline.cs` | **Pipeline architecture**: agent middleware, context providers (date/style/RAG), role-based **tool filtering** with enforcement, **tool discovery**, **dynamic tool adding**, and restricting tool calls (`AllowMultipleToolCalls = false`). | [Pipeline](https://learn.microsoft.com/en-us/agent-framework/agents/pipeline?pivots=programming-language-csharp) |
+| 10 | `Days/Day10_StructuredAndVision.cs` | **Structured outputs + vision**: typed responses, JSON-schema `ResponseFormat`, streaming structured output, and a Gemini-powered receipt auditor. | [Structured outputs](https://learn.microsoft.com/en-us/agent-framework/agents/structured-outputs?pivots=programming-language-csharp) |
+| 11 | `Days/Day11_BackgroundResponses.cs` | **Background responses**: long-running work with continuation tokens, polling, and resuming after an interruption. *(experimental, MEAI001)* | [Background responses](https://learn.microsoft.com/en-us/agent-framework/agents/background-responses?pivots=programming-language-csharp) |
+| 12 | `Days/Day12_AgentAsTool.cs` | **Agent as a tool**: wrap specialist agents with `AsAIFunction()` so a coordinator agent can delegate to them - the basis of multi-agent systems. | [Agent as tool](https://learn.microsoft.com/en-us/agent-framework/agents/agent-as-tool?pivots=programming-language-csharp) |
+| 13 | `Days/Day13_McpTools.cs` | **MCP as a tool**: connect to an external Model Context Protocol server, discover its tools with `ListToolsAsync`, and hand them to an agent. *(needs Node.js/npx)* | [MCP](https://learn.microsoft.com/en-us/agent-framework/agents/mcp?pivots=programming-language-csharp) |
 
-> Day 1 hard-codes the key on purpose, to show where we started. Replace
+> Day 1 hard-codes the key on purpose,
 > `gsk_your_api_key_here` in `Day1_Intro.cs` if you want to run it. Day 2 reads
 > the key from `GROQ_API_KEY` instead - the recommended approach.
 
@@ -86,6 +102,31 @@ protocol) with ASP.NET Core - that needs a web project and a server that runs
 forever, so it lives outside this console app. The DI registration shown in Day 6
 is exactly what those web endpoints build on.
 
+### A note on vision (Day 10)
+
+Vision uses **Google Gemini** via the `Mscc.GenerativeAI.Microsoft` package
+(`AgentFactory.CreateVisionAgent`), because the Groq free tier has no vision
+model. The text/structured output parts still run on Groq. Parts 4-5 read real
+images (a landmark photo and a receipt) and return typed data. Without
+`GOOGLE_API_KEY` those parts are skipped with a friendly note.
+
+### A note on background responses (Day 11)
+
+Background responses are only truly asynchronous on the **OpenAI / Azure OpenAI
+Responses API**. On Groq/Gemini the framework completes immediately, so Day 11
+exercises the same API surface (`AllowBackgroundResponses`, `ContinuationToken`,
+resume-after-interruption) via an immediate-completion path. Continuation also
+requires an `AgentSession`.
+
+### A note on MCP (Day 13)
+
+Day 13 consumes tools from an external **Model Context Protocol** server. It
+launches the reference `@modelcontextprotocol/server-everything` server via Node's
+`npx`, so it needs [Node.js](https://nodejs.org) on your PATH. The **first run
+downloads the server**, which can take a while, so the lesson uses a generous
+`InitializationTimeout`. If `npx` isn't found, the lesson explains the fix and
+exits gracefully instead of crashing.
+
 
 ## Project layout
 
@@ -96,6 +137,6 @@ is exactly what those web endpoints build on.
 
 ## Adding a new day
 
-1. Create `Days/Day7_Something.cs` implementing `ILesson`.
-2. Add `new Day7_Something()` to the `lessons` list in `Program.cs`.
+1. Create `Days/Day14_Something.cs` implementing `ILesson`.
+2. Add `new Day14_Something()` to the `lessons` list in `Program.cs`.
 

@@ -14,6 +14,9 @@ List<ILesson> lessons =
     new Day8_Harness(),
     new Day9_Pipeline(),
     new Day10_StructuredAndVision(),
+    new Day11_BackgroundResponses(),
+    new Day12_AgentAsTool(),
+    new Day13_McpTools(),
 ];
 
 // If a day number is passed on the command line (e.g. "dotnet run 2"), run it

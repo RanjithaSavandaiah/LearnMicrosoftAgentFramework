@@ -36,6 +36,12 @@ namespace LearnMicrosoftAgentFramework.Days;
 ///              that injects both knowledge and a tool, all stacked.
 ///     Part 5 - Tool filtering: a provider narrows the agent's toolset per request
 ///              (by caller role), so the model only sees the tools it's allowed to.
+///     Part 6 - Tool discovery: introspect the agent's toolbox (Name + Description)
+///              to build a capability catalogue.
+///     Part 7 - Dynamic tool adding: a provider grants a NEW tool at request time
+///              based on a live feature flag.
+///     Part 8 - Restrict tool calls: cap the model to one tool call per turn with
+///              ChatOptions.AllowMultipleToolCalls = false.
 /// </summary>
 public sealed class Day9_Pipeline : ILesson
 {
@@ -222,6 +228,88 @@ public sealed class Day9_Pipeline : ILesson
         Console.WriteLine();
         Console.WriteLine("Read-only user: Delete the production database now.");
         Console.WriteLine($"Agent: {await guardedOpsAgent.RunAsync("Delete the production database 'prod-db' now.")}");
+
+        Pause();
+
+        // Part 6 - TOOL DISCOVERY.
+        // Filtering decides which tools survive; discovery is the step BEFORE that -
+        // enumerating what an agent can do. Every AITool the agent knows about is
+        // reachable, and each one carries a self describing Name + Description (the
+        // same metadata the model uses to choose a tool). Here we simply introspect
+        // the toolbox and print a capability catalogue - exactly what you'd surface in
+        // a "/help" command, an admin dashboard, or an MCP-style tools/list response.
+        Console.WriteLine("Part 6: Tool discovery - introspect what the agent can do");
+        Console.WriteLine("---------------------------------------------------------");
+
+        IReadOnlyList<AITool> toolbox =
+        [
+            AIFunctionFactory.Create(OpsTools.GetServerHealth),
+            AIFunctionFactory.Create(OpsTools.RestartServer),
+            AIFunctionFactory.Create(OpsTools.DeleteDatabase),
+        ];
+
+        Console.WriteLine($"Discovered {toolbox.Count} tool(s):");
+        foreach (AITool tool in toolbox)
+        {
+            Console.WriteLine($"   - {tool.Name}: {tool.Description}");
+        }
+
+        Pause();
+
+        // Part 7 - DYNAMIC TOOL ADDING.
+        // Tools don't have to be fixed at construction time. A context provider runs
+        // before every call and can hand the model NEW tools chosen from the live
+        // request - a feature flag, the user's plan, the time of day, whatever. Below,
+        // FeatureFlagToolProvider only exposes the "beta" diagnostics tool when the
+        // caller has opted in, so the very same agent gains or loses a capability per
+        // request without being rebuilt.
+        Console.WriteLine("Part 7: Dynamic tool adding - grant a tool at request time");
+        Console.WriteLine("----------------------------------------------------------");
+
+        AIAgent flagAgent = AgentFactory.CreateAgent(new ChatClientAgentOptions
+        {
+            Name = "DiagnosticsAssistant",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = "You help run diagnostics. Use a tool when one is available.",
+            },
+            AIContextProviders = [new FeatureFlagToolProvider(betaEnabled: true)],
+        },
+        model: AgentFactory.ToolCapableModel);
+
+        Console.WriteLine("Beta user: Run a deep diagnostic on web-01.");
+        Console.WriteLine($"Agent: {await flagAgent.RunAsync("Run a deep diagnostic on web-01.")}");
+
+        Pause();
+
+        // Part 8 - RESTRICT TOOL CALLS with AllowMultipleToolCalls = false.
+        // By default a model may fire SEVERAL tool calls in a single turn (a parallel
+        // batch). Sometimes you want at most one call per assistant turn - for rate
+        // limiting, cost control, or step-by-step approval flows. Setting
+        // ChatOptions.AllowMultipleToolCalls = false on the run options asks the model
+        // not to emit parallel tool calls for that request. (How strictly it is honored
+        // depends on the provider; it's a request-scoped hint via ChatOptions.)
+        Console.WriteLine("Part 8: Restrict tool calls - AllowMultipleToolCalls = false");
+        Console.WriteLine("-----------------------------------------------------------");
+
+        AIAgent singleCallAgent = AgentFactory.CreateAgent(
+            name: "OpsAssistant",
+            instructions: "You are an operations assistant. Use tools to answer. Be concise.",
+            tools:
+            [
+                AIFunctionFactory.Create(OpsTools.GetServerHealth),
+            ],
+            model: AgentFactory.ToolCapableModel);
+
+        // The run options carry ChatOptions where we cap tool calls to one.
+        ChatClientAgentRunOptions singleCallOptions = new(new ChatOptions
+        {
+            AllowMultipleToolCalls = false,
+        });
+
+        Console.WriteLine("User: Check the health of web-01, web-02 and web-03.");
+        Console.WriteLine(
+            $"Agent: {await singleCallAgent.RunAsync("Check the health of web-01, web-02 and web-03.", options: singleCallOptions)}");
 
         Console.WriteLine();
         Console.WriteLine("Takeaway: an agent is a layered pipeline. Add middleware to wrap the whole");
@@ -449,6 +537,14 @@ internal static class OpsTools
         Console.WriteLine($"   [tool DeleteDatabase called for '{database}']");
         return $"Database '{database}' deleted.";
     }
+
+    [Description("Runs a deep diagnostic scan on a server. Beta feature.")]
+    public static string RunDeepDiagnostic(
+        [Description("The server name to scan, e.g. web-01.")] string server)
+    {
+        Console.WriteLine($"   [tool RunDeepDiagnostic called for '{server}']");
+        return $"Deep diagnostic on '{server}': 0 critical issues, 2 warnings (disk 78% full, 1 slow query).";
+    }
 }
 
 /// <summary>
@@ -494,5 +590,30 @@ internal sealed class RoleBasedToolFilterProvider(bool isAdmin) : AIContextProvi
 
         // Returning Tools REPLACES the toolset the model sees for this invocation.
         return ValueTask.FromResult(new AIContext { Tools = filtered });
+    }
+}
+
+/// <summary>
+/// A context layer provider that performs DYNAMIC TOOL ADDING. Instead of narrowing
+/// an existing toolset, it GRANTS a brand new tool at request time when a feature
+/// flag is on. The same agent therefore gains or loses a capability per request,
+/// without being reconstructed - ideal for beta features, plan tiers, or A/B tests.
+/// </summary>
+internal sealed class FeatureFlagToolProvider(bool betaEnabled) : AIContextProvider
+{
+    protected override ValueTask<AIContext> ProvideAIContextAsync(
+        InvokingContext context, CancellationToken cancellationToken = default)
+    {
+        if (!betaEnabled)
+        {
+            Console.WriteLine("   [context:featureflag] beta OFF - no extra tools granted");
+            return ValueTask.FromResult(new AIContext());
+        }
+
+        Console.WriteLine("   [context:featureflag] beta ON - granting RunDeepDiagnostic tool");
+        return ValueTask.FromResult(new AIContext
+        {
+            Tools = [AIFunctionFactory.Create(OpsTools.RunDeepDiagnostic)],
+        });
     }
 }
