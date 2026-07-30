@@ -20,14 +20,17 @@ namespace LearnMicrosoftAgentFramework.Days;
 ///   together and you get something genuinely useful: an agent that LOOKS at a
 ///   receipt and hands you a typed, ready to persist expense record.
 ///
-///   This lesson escalates through five techniques:
+///   This lesson escalates through six techniques:
 ///     Part 1 - RunAsync<T>: the compile time typed happy path (text -> object).
-///     Part 2 - ResponseFormat with a JSON schema, configure the shape at the
-///              agent/options level when the type isn't known until runtime.
+///     Part 2 - ResponseFormat with ForJsonSchema<T>: configure the schema on the
+///              agent so it applies to every call (still a compile time type).
 ///     Part 3 - STREAMING structured output: stream updates, assemble with
 ///              ToAgentResponseAsync(), then deserialize once complete.
-///     Part 4 - Vision: send an image + prompt so the agent can analyze pixels.
-///     Part 5 - vision + structured output together photograph a
+///     Part 4 - RUNTIME schema: the shape isn't a C# type at all - build a JSON
+///              schema at runtime (ForJsonSchema(JsonElement)) and read the reply
+///              dynamically with JsonDocument. Perfect for user/config defined forms.
+///     Part 5 - Vision: send an image + prompt so the agent can analyze pixels.
+///     Part 6 - vision + structured output together photograph a
 ///              receipt, get back a strongly typed, validated ExpenseReport, and
 ///              run a real business rule (policy check) against the parsed data.
 ///
@@ -160,11 +163,75 @@ public sealed class Day10_StructuredAndVision : ILesson
 
         Pause();
 
-        // Part 4 - Vision: let the agent read an image.
+        // Part 4 - RUNTIME schema (the shape is NOT a C# type).
+        // Parts 1-3 all used compile time types (ContactCard, SupportTriage). But
+        // sometimes you DON'T know the shape at compile time the fields come from a
+        // database, a config file, or a form a user designed at runtime. In that case
+        // you can't write a class or use RunAsync<T> / ForJsonSchema<T>.
+        // Instead you BUILD a JSON schema as data (a JsonElement) and pass it to the
+        // NON-generic ForJsonSchema(JsonElement) overload. The model still returns
+        // schema valid JSON, but you read it DYNAMICALLY with JsonDocument because
+        // there's no type to deserialize into.
+        Console.WriteLine("Part 4: Runtime schema - shape decided at runtime, read dynamically");
+        Console.WriteLine("-------------------------------------------------------------------");
+
+        // Imagine these field definitions arrived from a config file or a form builder
+        // at runtime not hard coded classes.
+        (string Name, string Type, string Description)[] runtimeFields =
+        [
+            ("productName", "string", "The name of the product being reviewed."),
+            ("rating", "integer", "A star rating from 1 to 5."),
+            ("prosCons", "string", "A short summary of the pros and cons."),
+            ("wouldRecommend", "boolean", "Whether the reviewer would recommend it."),
+        ];
+
+        // Build a JSON Schema document at runtime from those fields.
+        string schemaJson = BuildRuntimeSchema(runtimeFields);
+        Console.WriteLine("   [runtime schema built]");
+        Console.WriteLine($"   {schemaJson}");
+        Console.WriteLine();
+
+        using JsonDocument schemaDoc = JsonDocument.Parse(schemaJson);
+        ChatResponseFormat runtimeFormat = ChatResponseFormat.ForJsonSchema(
+            schema: schemaDoc.RootElement,
+            schemaName: "ProductReview",
+            schemaDescription: "A structured product review defined at runtime.");
+
+        AIAgent runtimeAgent = AgentFactory.CreateAgent(new ChatClientAgentOptions
+        {
+            Name = "RuntimeExtractor",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = "Extract a structured product review from the user's text.",
+                ResponseFormat = runtimeFormat,
+            },
+        },
+        model: AgentFactory.ToolCapableModel);
+
+        AgentResponse runtimeRaw = await runtimeAgent.RunAsync(
+            "I bought the AcousticPro X2 headphones last week. Sound quality is superb and "
+          + "battery lasts for days, but they're a bit heavy on long calls. Solid 4 stars "
+          + "I'd definitely recommend them.");
+
+        // No C# type to deserialize into, so read the fields dynamically.
+        using JsonDocument resultDoc = JsonDocument.Parse(runtimeRaw.ToString());
+        JsonElement root = resultDoc.RootElement;
+        Console.WriteLine("   [read dynamically with JsonDocument]");
+        foreach ((string name, _, _) in runtimeFields)
+        {
+            if (root.TryGetProperty(name, out JsonElement value))
+            {
+                Console.WriteLine($"   {name}: {value}");
+            }
+        }
+
+        Pause();
+
+        // Part 5 - Vision: let the agent read an image.
         // A ChatMessage can carry mixed content, TextContent (the prompt) plus
         // UriContent (a hosted image). Give it to a multimodal model and it analyzes
         // the pixels. Here we ask for a quick description to prove vision works.
-        Console.WriteLine("Part 4: Vision - the agent analyzes an image");
+        Console.WriteLine("Part 5: Vision - the agent analyzes an image");
         Console.WriteLine("--------------------------------------------");
 
         AIAgent visionAgent = AgentFactory.CreateVisionAgent(
@@ -187,8 +254,8 @@ public sealed class Day10_StructuredAndVision : ILesson
 
         Pause();
 
-        // Part 5 - THE FINALE: vision + structured output = a receipt auditor.
-        Console.WriteLine("Part 5: Receipt auditor - read an image, return a typed expense report");
+        // Part 6 - THE FINALE: vision + structured output = a receipt auditor.
+        Console.WriteLine("Part 6: Receipt auditor - read an image, return a typed expense report");
         Console.WriteLine("---------------------------------------------------------------------");
 
         AIAgent auditor = AgentFactory.CreateVisionAgent(
@@ -262,6 +329,47 @@ public sealed class Day10_StructuredAndVision : ILesson
         Console.Write("Press Enter for the next part...");
         Console.ReadLine();
         Console.WriteLine();
+    }
+
+    /// <summary>
+    /// Builds a JSON Schema document at runtime from a set of field definitions.
+    /// This stands in for fields that come from a database, config, or a form the
+    /// user designed a shape that has no compile time C# type. The result is a
+    /// JSON string that <see cref="JsonDocument"/> can parse into a JsonElement for
+    /// <see cref="ChatResponseFormat.ForJsonSchema(JsonElement, string?, string?)"/>.
+    /// </summary>
+    private static string BuildRuntimeSchema((string Name, string Type, string Description)[] fields)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", "object");
+
+            writer.WriteStartObject("properties");
+            foreach ((string name, string type, string description) in fields)
+            {
+                writer.WriteStartObject(name);
+                writer.WriteString("type", type);
+                writer.WriteString("description", description);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+
+            // Require every field so the model always fills them in.
+            writer.WriteStartArray("required");
+            foreach ((string name, _, _) in fields)
+            {
+                writer.WriteStringValue(name);
+            }
+            writer.WriteEndArray();
+
+            // Strict schemas disallow extra properties.
+            writer.WriteBoolean("additionalProperties", false);
+            writer.WriteEndObject();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>
