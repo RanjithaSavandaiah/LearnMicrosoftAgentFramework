@@ -55,6 +55,8 @@ Each day reflects how the code actually evolved:
 | 11 | `Days/Day11_BackgroundResponses.cs` | **Background responses**: long-running work with continuation tokens, polling, and resuming after an interruption. *(experimental, MEAI001)* | [Background responses](https://learn.microsoft.com/en-us/agent-framework/agents/background-responses?pivots=programming-language-csharp) |
 | 12 | `Days/Day12_AgentAsTool.cs` | **Agent as a tool**: wrap specialist agents with `AsAIFunction()` so a coordinator agent can delegate to them - the basis of multi-agent systems. | [Agent as tool](https://learn.microsoft.com/en-us/agent-framework/agents/agent-as-tool?pivots=programming-language-csharp) |
 | 13 | `Days/Day13_McpTools.cs` | **MCP as a tool**: connect to an external Model Context Protocol server, discover its tools with `ListToolsAsync`, and hand them to an agent. *(needs Node.js/npx)* | [MCP](https://learn.microsoft.com/en-us/agent-framework/agents/mcp?pivots=programming-language-csharp) |
+| 14 | `Days/Day14_Rag.cs` | **RAG**: embed a knowledge base with Gemini embeddings, retrieve the most relevant chunks by cosine similarity, and ground the agent - manually and via the built-in `TextSearchProvider` / `TextSearchProviderOptions`. | [RAG](https://learn.microsoft.com/en-us/agent-framework/agents/rag?pivots=programming-language-csharp) |
+| 15 | `Days/Day15_DeclarativeAgents.cs` | **Declarative agents**: define an agent (name, instructions, model, tools) in a YAML file, then build a live `AIAgent` from it at runtime - change behaviour by editing config, no recompile. | [Declarative](https://learn.microsoft.com/en-us/agent-framework/agents/declarative?pivots=programming-language-csharp) |
 
 > Day 1 hard-codes the key on purpose,
 > `gsk_your_api_key_here` in `Day1_Intro.cs` if you want to run it. Day 2 reads
@@ -134,6 +136,23 @@ downloads the server**, which can take a while, so the lesson uses a generous
 `InitializationTimeout`. If `npx` isn't found, the lesson explains the fix and
 exits gracefully instead of crashing.
 
+### A note on RAG (Day 14)
+
+Day 14 needs `GOOGLE_API_KEY` for the **embedding** model
+(`gemini-embedding-001`), because the Groq free tier has no embedding model. The
+chat agent still runs on Groq. Retrieval is an in-memory vector store with cosine
+similarity via `System.Numerics.Tensors` (no external vector DB needed for the
+sample).
+
+### A note on declarative agents (Day 15)
+
+Day 15 loads an agent definition from `Agents/weatherbot.yaml` (copied to the
+output folder) and builds a live agent from it - the prompt, model and tool wiring
+live in **config**, not code. The framework's first-party declarative loaders
+target Azure AI Foundry / hosted agents; to keep the lesson runnable on the
+Groq/Gemini setup, it parses the same style of definition with `YamlDotNet` and
+binds named tools to real C# implementations. Same concept: config in, agent out.
+
 
 ## Project layout
 
@@ -144,6 +163,6 @@ exits gracefully instead of crashing.
 
 ## Adding a new day
 
-1. Create `Days/Day14_Something.cs` implementing `ILesson`.
-2. Add `new Day14_Something()` to the `lessons` list in `Program.cs`.
+1. Create `Days/Day16_Something.cs` implementing `ILesson`.
+2. Add `new Day16_Something()` to the `lessons` list in `Program.cs`.
 

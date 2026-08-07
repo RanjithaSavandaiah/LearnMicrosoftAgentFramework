@@ -129,6 +129,29 @@ public static class AgentFactory
     }
 
     /// <summary>
+    /// The Google Gemini embedding model used for RAG. Embeddings turn text into a
+    /// vector so we can measure semantic similarity between a question and documents.
+    /// </summary>
+    public const string EmbeddingModel = "gemini-embedding-001";
+
+    /// <summary>
+    /// Creates an <see cref="IEmbeddingGenerator{String, Embedding}"/> backed by
+    /// Google Gemini. Used by the RAG lesson to embed both the knowledge base and the
+    /// user's query so relevant chunks can be retrieved by cosine similarity. Reads
+    /// the key from GOOGLE_API_KEY. The Groq free tier exposes no embedding model.
+    /// </summary>
+    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(
+        string? model = null, int? dimensions = null)
+    {
+        string apiKey = GetEnvVar("GOOGLE_API_KEY")
+            ?? throw new InvalidOperationException(
+                "GOOGLE_API_KEY is not set. Set it with:  setx GOOGLE_API_KEY \"your-key\"  and open " +
+                "a NEW terminal (or set it for this process), then try again.");
+
+        return new GeminiClient(apiKey).AsIEmbeddingGenerator(model ?? EmbeddingModel, dimensions);
+    }
+
+    /// <summary>
     /// Reads an environment variable, checking the process, then user, then machine
     /// scope so a value set via <c>setx</c> is picked up without restarting.
     /// </summary>

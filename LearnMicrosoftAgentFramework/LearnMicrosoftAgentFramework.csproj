@@ -13,6 +13,14 @@
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.11.1" />
     <PackageReference Include="ModelContextProtocol" Version="2.0.0" />
     <PackageReference Include="Mscc.GenerativeAI.Microsoft" Version="3.1.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ship the declarative agent definition next to the app so Day 15 can load it. -->
+    <None Update="Agents\weatherbot.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
