@@ -51,7 +51,7 @@ Each day reflects how the code actually evolved:
 | 7 | `Days/Day7_RunningAgents.cs` | **Running agents**: the many ways to run an `AIAgent` - single string, explicit `ChatMessage` lists, `RunStreamingAsync`, sessions, `ChatClientAgentRunOptions`, and cancellation. | [Agents](https://learn.microsoft.com/en-us/agent-framework/agents/?pivots=programming-language-csharp) · [Running agents](https://learn.microsoft.com/en-us/agent-framework/agents/running-agents?pivots=programming-language-csharp) |
 | 8 | `Days/Day8_Harness.cs` | **Agent harness**: a self driving loop with `LoopAgent`. Completion-marker, delegate, and AI-judge evaluators, plus every `LoopAgentOptions`. *(experimental, MAAI001)* | [Harness](https://learn.microsoft.com/en-us/agent-framework/agents/harness?pivots=programming-language-csharp) |
 | 9 | `Days/Day9_Pipeline.cs` | **Pipeline architecture**: agent middleware, context providers (date/style/RAG), role-based **tool filtering** with enforcement, **tool discovery**, **dynamic tool adding**, and restricting tool calls (`AllowMultipleToolCalls = false`). | [Pipeline](https://learn.microsoft.com/en-us/agent-framework/agents/pipeline?pivots=programming-language-csharp) |
-| 10 | `Days/Day10_StructuredAndVision.cs` | **Structured outputs + vision**: typed responses, JSON-schema `ResponseFormat`, streaming structured output, a **runtime-defined schema**, and a Gemini-powered receipt auditor. | [Structured outputs](https://learn.microsoft.com/en-us/agent-framework/agents/structured-outputs?pivots=programming-language-csharp) |
+| 10 | `Days/Day10_StructuredAndVision.cs` | **Structured outputs + vision**: typed responses, JSON-schema `ResponseFormat`, streaming structured output, a **runtime-defined schema**, **text-to-image generation**, and a Gemini-powered receipt auditor. | [Structured outputs](https://learn.microsoft.com/en-us/agent-framework/agents/structured-outputs?pivots=programming-language-csharp) |
 | 11 | `Days/Day11_BackgroundResponses.cs` | **Background responses**: long-running work with continuation tokens, polling, and resuming after an interruption. *(experimental, MEAI001)* | [Background responses](https://learn.microsoft.com/en-us/agent-framework/agents/background-responses?pivots=programming-language-csharp) |
 | 12 | `Days/Day12_AgentAsTool.cs` | **Agent as a tool**: wrap specialist agents with `AsAIFunction()` so a coordinator agent can delegate to them - the basis of multi-agent systems. | [Agent as tool](https://learn.microsoft.com/en-us/agent-framework/agents/agent-as-tool?pivots=programming-language-csharp) |
 | 13 | `Days/Day13_McpTools.cs` | **MCP as a tool**: connect to an external Model Context Protocol server, discover its tools with `ListToolsAsync`, and hand them to an agent. *(needs Node.js/npx)* | [MCP](https://learn.microsoft.com/en-us/agent-framework/agents/mcp?pivots=programming-language-csharp) |
@@ -109,9 +109,13 @@ Vision uses **Google Gemini** via the `Mscc.GenerativeAI.Microsoft` package
 model. The text/structured output parts still run on Groq including a
 **runtime schema** part (Part 4) that builds a JSON schema as data and reads the
 reply dynamically with `JsonDocument`, for shapes not known at compile time. The
-vision parts (5-6) read real images (a landmark photo and a receipt) and return
-typed data. Without `GOOGLE_API_KEY` those vision parts are skipped with a
-friendly note.
+vision parts (5 and 7) read real images (a landmark photo and a receipt) and
+return typed data, and need `GOOGLE_API_KEY`. Part 6 flips direction and does
+**text-to-image generation** using **Pollinations.ai** - a free, no-API-key
+image endpoint - so it works on any machine with internet and no billing. It
+`GET`s the image bytes for a prompt and saves `generated-image.jpg` to disk.
+(Gemini/Imagen image output was intentionally avoided: its free-tier limit is
+literally zero and it requires a billing-enabled key.)
 
 ### A note on background responses (Day 11)
 

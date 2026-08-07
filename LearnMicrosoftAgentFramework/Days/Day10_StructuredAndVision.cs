@@ -20,7 +20,7 @@ namespace LearnMicrosoftAgentFramework.Days;
 ///   together and you get something genuinely useful: an agent that LOOKS at a
 ///   receipt and hands you a typed, ready to persist expense record.
 ///
-///   This lesson escalates through six techniques:
+///   This lesson escalates through seven techniques:
 ///     Part 1 - RunAsync<T>: the compile time typed happy path (text -> object).
 ///     Part 2 - ResponseFormat with ForJsonSchema<T>: configure the schema on the
 ///              agent so it applies to every call (still a compile time type).
@@ -30,7 +30,9 @@ namespace LearnMicrosoftAgentFramework.Days;
 ///              schema at runtime (ForJsonSchema(JsonElement)) and read the reply
 ///              dynamically with JsonDocument. Perfect for user/config defined forms.
 ///     Part 5 - Vision: send an image + prompt so the agent can analyze pixels.
-///     Part 6 - vision + structured output together photograph a
+///     Part 6 - TEXT -> IMAGE: send a text prompt and get a GENERATED image back,
+///              saved to disk (Gemini image model).
+///     Part 7 - vision + structured output together photograph a
 ///              receipt, get back a strongly typed, validated ExpenseReport, and
 ///              run a real business rule (policy check) against the parsed data.
 ///
@@ -254,8 +256,29 @@ public sealed class Day10_StructuredAndVision : ILesson
 
         Pause();
 
-        // Part 6 - THE FINALE: vision + structured output = a receipt auditor.
-        Console.WriteLine("Part 6: Receipt auditor - read an image, return a typed expense report");
+        // Part 6 - TEXT -> IMAGE generation.
+        // Every part so far took/returned TEXT (or read an image). Here we flip it:
+        // give a text PROMPT and get back a freshly GENERATED image. We use
+        // Pollinations.ai - a free, no-API-key image endpoint so this works on any
+        // machine with internet, no billing required. We just GET the image bytes and
+        // save a real file you can open.
+        Console.WriteLine("Part 6: Text -> image - generate a picture from a prompt");
+        Console.WriteLine("--------------------------------------------------------");
+
+        const string ImagePrompt =
+            "A friendly robot reading a book under a tree, warm sunset lighting, flat vector art.";
+        Console.WriteLine($"Prompt: \"{ImagePrompt}\"");
+
+        string? savedImagePath = await GenerateImageAsync(ImagePrompt);
+        if (savedImagePath is not null)
+        {
+            Console.WriteLine($"   [saved] {savedImagePath}");
+        }
+
+        Pause();
+
+        // Part 7 - THE FINALE: vision + structured output = a receipt auditor.
+        Console.WriteLine("Part 7: Receipt auditor - read an image, return a typed expense report");
         Console.WriteLine("---------------------------------------------------------------------");
 
         AIAgent auditor = AgentFactory.CreateVisionAgent(
@@ -370,6 +393,58 @@ public sealed class Day10_StructuredAndVision : ILesson
         }
 
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    // One HttpClient for the whole lesson (creating one per call is an anti pattern).
+    private static readonly HttpClient Http = new();
+
+    /// <summary>
+    /// Generates an image from a text prompt using Pollinations.ai and saves it to
+    /// disk. Pollinations is a free, no-API-key image endpoint: you simply GET
+    /// https://image.pollinations.ai/prompt/{prompt} and it streams back the image
+    /// bytes. That makes it perfect for a sample it works on any machine with
+    /// internet and needs no billing (unlike Gemini/Imagen image output). Returns
+    /// the saved file path, or null (with a friendly note) if generation fails.
+    /// </summary>
+    private static async Task<string?> GenerateImageAsync(string prompt)
+    {
+        // URL-encode the prompt into the path, and ask for a fixed size + no logo.
+        string encodedPrompt = Uri.EscapeDataString(prompt);
+        string url =
+            $"https://image.pollinations.ai/prompt/{encodedPrompt}?width=768&height=512&nologo=true";
+
+        byte[] bytes;
+        try
+        {
+            // Image generation can take a little while, so allow a generous timeout.
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            using HttpResponseMessage response = await Http.SendAsync(request, cts.Token);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"   [skipped] Image generation failed (HTTP {(int)response.StatusCode}).");
+                return null;
+            }
+
+            bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"   [skipped] Could not reach the image endpoint: {ex.Message}");
+            return null;
+        }
+
+        if (bytes.Length == 0)
+        {
+            Console.WriteLine("   [skipped] The response contained no image data.");
+            return null;
+        }
+
+        // Pollinations returns JPEG, so save with a .jpg extension.
+        string path = Path.Combine(AppContext.BaseDirectory, "generated-image.jpg");
+        await File.WriteAllBytesAsync(path, bytes);
+        return path;
     }
 
     /// <summary>
